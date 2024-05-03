@@ -1,7 +1,8 @@
-const express = require("express");
-const app = express();
-require('dotenv').config()
+import express from 'express';
+import env from 'dotenv';
+env.config()
 
+const app = express();
 
 app.get('/', (req, res)=>{
     return res.json({status: true, message: 'API working'})
