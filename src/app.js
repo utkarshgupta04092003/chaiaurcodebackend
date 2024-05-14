@@ -20,4 +20,10 @@ app.use(express.static('public'));
 
 
 
+// import userRouter
+import userRouter from './routes/user.routes.js';
+// use userrouter for redirecting to router page
+app.use('/api/v1/users', userRouter);
+// http://localhost:3000/api/v1/users
+
 export { app };
