@@ -5,7 +5,7 @@ const storage = multer.diskStorage({
     },
     filename: function (req, file, cb) {
         console.log("file middleware: ", file);
-        cb(null, file.originalname);
+        cb(null, file.fieldname+"-"+req.body.username.toLowerCase()+'.png');
     },
 });
 

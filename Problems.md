@@ -1,0 +1,2 @@
+- setting up env variables in cloudinary file
+    - The code was executing before the server start, i figured out by config env variables in the cloudinary file before configuring cloudinary.

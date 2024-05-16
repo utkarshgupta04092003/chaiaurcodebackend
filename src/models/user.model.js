@@ -48,20 +48,16 @@ const userSchema = new mongoose.Schema(
     },
     { timestamps: true }
 );
-
 // pre middleware to hashed the password before saving the password when it changes
 userSchema.pre("save", async function (next) {
     if (!this.isModified("password")) return next();
-
-    this.password = bcrypt.hash(this.password, 10);
+    this.password = await bcrypt.hash(this.password, 10);
     next();
 });
-
 // check whether the password is correct or not, return true/false
 userSchema.methods.isPasswordCorrect = async function (password) {
     return await bcrypt.compare(password, this.password);
 };
-
 // generate access token
 userSchema.methods.generateAccesstoken = function () {
     return jwt.sign(
@@ -77,7 +73,6 @@ userSchema.methods.generateAccesstoken = function () {
         }
     );
 };
-
 // generate access token
 userSchema.methods.generateRefreshtoken = function () {
     return jwt.sign(

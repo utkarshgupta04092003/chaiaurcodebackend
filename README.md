@@ -1,4 +1,4 @@
-# Chai aur code Backend Playlist
+# Chai aur code Backend Playlist(working)
 
 - Model Link: [click here](https://app.eraser.io/workspace/YtPqZ1VogxGy1jzIDkzj)
 
@@ -20,4 +20,5 @@ create .env file and give these values
 
 
 ## Routes
+- test server: /api/v1/test
 - user register: /api/v1/users/register
