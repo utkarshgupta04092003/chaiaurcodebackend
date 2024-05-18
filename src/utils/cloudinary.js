@@ -1,7 +1,7 @@
 import { v2 as cloudinary } from "cloudinary";
 import fs from "fs";
-import dotenv from 'dotenv';
-
+import dotenv from "dotenv";
+import { removeFiles } from "./removeFiles.js";
 dotenv.config();
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -11,18 +11,17 @@ cloudinary.config({
 const uploadOnCloudinary = async (localFilePath, folderName) => {
     try {
         if (!localFilePath) return null;
-
         // upload the files
         const response = await cloudinary.uploader.upload(localFilePath, {
             resource_type: "auto",
-            folder: folderName
+            folder: folderName,
         });
-        fs.unlinkSync(localFilePath);
+        removeFiles(localFilePath);
         return response;
     } catch (err) {
         // remove the file from local saved temp file as the upload fails
-        fs.unlinkSync(localFilePath);
+        removeFiles(localFilePath);
         throw err;
     }
 };
-export {uploadOnCloudinary};
+export { uploadOnCloudinary };

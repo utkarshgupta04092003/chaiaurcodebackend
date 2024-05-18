@@ -5,17 +5,25 @@ import { ValidateEmail } from "../utils/ValidateEmail.js";
 import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { coverImageCloudinaryFoldername, profileImageCloudinaryFoldername } from "../constant.js";
+import { removeFiles } from "../utils/removeFiles.js";
+
 
 const registerUser = asyncHandler(async (req, res) => {
     // take user input from frontend
     const { username, email, fullname, password } = req.body;
+    // check for the file
+    const avatarImageLocalPath = req.files?.avatar[0].path;
+    let coverImageLocalPath = "";
+    if (req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0)
+        coverImageLocalPath = req.files.coverImage[0].path;
     // empty validation
     if ([username, email, fullname, password].some((field) => field?.trim() === "")) {
         throw new ApiError(400, "All fields are required");
     }
     // validate email format
     if (!ValidateEmail(email)) {
-        console.log('checking emal validation');
+        removeFiles(avatarImageLocalPath);
+        removeFiles(coverImageLocalPath)
         throw new ApiError(400, "Invalid email format");
     }
     // check for the user is already exist or not
@@ -23,13 +31,10 @@ const registerUser = asyncHandler(async (req, res) => {
         $or: [{ username }, { email }]
     })
     if (existUser) {
+        removeFiles(avatarImageLocalPath);
+        removeFiles(coverImageLocalPath)
         throw new ApiError(409, "User with email or username already exist");
     }
-    // check for the file
-    const avatarImageLocalPath = req.files?.avatar[0].path;
-    let coverImageLocalPath = "";
-    if (req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0)
-        coverImageLocalPath = req.files.coverImage[0].path;
     // upload the file to cloudinary
     const cloudinaryAvatarResponse = await uploadOnCloudinary(avatarImageLocalPath, profileImageCloudinaryFoldername);
     let cloudinaryCoverImageResponse = "";
