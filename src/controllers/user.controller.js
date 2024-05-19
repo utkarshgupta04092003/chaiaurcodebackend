@@ -9,6 +9,7 @@ import {
     profileImageCloudinaryFoldername,
 } from "../constant.js";
 import { removeFiles } from "../utils/removeFiles.js";
+import jwt from "jsonwebtoken";
 
 // generate access token and refresh token
 const generateAccesstokenAndRefreshToken = async (userId) => {
@@ -95,20 +96,12 @@ const registerUser = asyncHandler(async (req, res) => {
 });
 
 const loginUser = asyncHandler(async (req, res) => {
-    // TODOS:
-    // fetch the data from client side stored in req body
-    // check whether user exist in db or not using email and password or username or password
-    // generate access token and refresh token and stored it in db
-    // send the user details with refresh and access toekn after deleting the password in cookies
-
     // fetch data from req body
     const { username, email, password } = req.body;
     console.log("username", username, email, password);
-
     if (!(username || email)) {
         throw new ApiError(400, "Username or email is required");
     }
-
     // find the user in the db
     const user = await User.findOne({
         $or: [{ username }, { email }],
@@ -117,17 +110,14 @@ const loginUser = asyncHandler(async (req, res) => {
     if (!user) {
         throw new ApiError(404, "User does not exist");
     }
-
     const verifyPassword = await user.isPasswordCorrect(password);
     if (!verifyPassword) {
         throw new ApiError(401, "Invalid user credentials");
     }
-
     // create access toekna nd refresh toekn
     const { accessToken, refreshToken } =
         await generateAccesstokenAndRefreshToken(user._id);
     const loggedInUser = await User.findById(user._id).select("-password");
-
     // setup cookies
     const option = {
         httpOnly: true,
@@ -163,10 +153,51 @@ const logout = asyncHandler(async (req, res) => {
         secure: true,
     };
     // clear cookies from the request
-
-    return res.status(200)
-    .clearCookie("accessToken", option)
-    .clearCookie("refreshToken", option)
-    .json(new ApiResponse(200, "Logout successfully"));
+    return res
+        .status(200)
+        .clearCookie("accessToken", option)
+        .clearCookie("refreshToken", option)
+        .json(new ApiResponse(200, "Logout successfully"));
 });
-export { registerUser, loginUser, logout };
+
+const refreshAccessToken = asyncHandler(async (req, res) => {
+    // TODOS:
+
+    // fetch refreshtoken from request body or cookies
+    const incomingRefreshToken =
+        req.body.refreshToken || req.cookies.refreshToken;
+    if (!incomingRefreshToken) {
+        throw new ApiError(401, "Invalid Refresh Token");
+    }
+    // validate refreshtoken using jwt
+    const decoded = await jwt.verify(
+        incomingRefreshToken,
+        process.env.REFRESH_TOKEN_SECRET
+    );
+    if (!decoded) {
+        throw new ApiError(401, "Invalid Refresh Token");
+    }
+    // get the user details from db
+    const user = await User.findById(decoded._id);
+    if (!user) {
+        throw new ApiError(401, "Invalid Refresh Token");
+    }
+    // verify refresh token with user refresh token
+    if (user.refreshToken !== incomingRefreshToken) {
+        throw new ApiError(401, "Refresh Token is expired or Invalid");
+    }
+    // generate new tokens
+    const { accessToken, refreshToken } =
+        await generateAccesstokenAndRefreshToken(user._id);
+    const option = {
+        httpOnly: true,
+        secure: true,
+    };
+    // send new access token in cookie
+    return res
+        .status(200)
+        .cookie("accessToken", accessToken, option)
+        .cookie("refreshToken", refreshToken, option)
+        .json(new ApiResponse(200, "Access code Refreshed", { accessToken }));
+});
+export { registerUser, loginUser, logout, refreshAccessToken };
