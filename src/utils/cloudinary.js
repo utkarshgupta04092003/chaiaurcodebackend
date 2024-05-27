@@ -2,6 +2,7 @@ import { v2 as cloudinary } from "cloudinary";
 import fs from "fs";
 import dotenv from "dotenv";
 import { removeFiles } from "./removeFiles.js";
+import { ApiError } from "./ApiError.js";
 dotenv.config();
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -24,4 +25,25 @@ const uploadOnCloudinary = async (localFilePath, folderName) => {
         throw err;
     }
 };
-export { uploadOnCloudinary };
+
+function extractPublicId(url) {
+    const regex = /\/upload\/(?:v\d+\/)?(.+?)(?=\.[^.]*$)/;
+    const matches = url.match(regex);
+    return matches ? matches[1] : null;
+  }
+
+
+const deleteFromCloudinary = async (cloudinaryURL) => {
+    try {
+        // get the public id from cloudinary public url
+        const publicId = extractPublicId(cloudinaryURL);
+        const response = await cloudinary.uploader.destroy(publicId);
+        if(response.result !== 'ok'){
+            throw new ApiError(500, "Something went wrong while deleting previous cloudinary image");
+        }
+        // console.log("Deleted from cloudinary");
+    } catch (error) {
+        throw new ApiError(500, error.message);
+    }
+};
+export { uploadOnCloudinary, deleteFromCloudinary };
