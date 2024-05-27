@@ -3,13 +3,18 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ValidateEmail } from "../utils/ValidateEmail.js";
 import { User } from "../models/user.model.js";
-import { deleteFromCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js";
+import {
+    deleteFromCloudinary,
+    uploadOnCloudinary,
+} from "../utils/cloudinary.js";
 import {
     coverImageCloudinaryFoldername,
     profileImageCloudinaryFoldername,
 } from "../constant.js";
 import { removeFiles } from "../utils/removeFiles.js";
 import jwt from "jsonwebtoken";
+import e from "express";
+import mongoose from "mongoose";
 
 // generate access token and refresh token
 const generateAccesstokenAndRefreshToken = async (userId) => {
@@ -256,17 +261,20 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Avatar file is missing");
     }
     // upload to cloudinary
-    const avatarResponse = await uploadOnCloudinary(avatarImageLocalPath, profileImageCloudinaryFoldername);
+    const avatarResponse = await uploadOnCloudinary(
+        avatarImageLocalPath,
+        profileImageCloudinaryFoldername
+    );
     if (!avatarResponse) {
         throw new ApiError(500, "Something went wrong in cloudinary");
     }
     const userId = req.user?._id;
     // store the previous cloudinary avatar url for delete later
     const cloudinaryProfileUrl = await User.findById(userId).select("avatar");
-    if(!cloudinaryProfileUrl){
+    if (!cloudinaryProfileUrl) {
         throw new ApiError(500, "Cannot get user's previous avatar Url");
     }
-    // update the avatar url 
+    // update the avatar url
     const user = await User.findByIdAndUpdate(
         userId,
         {
@@ -276,7 +284,7 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
         },
         { new: true }
     ).select("-password");
-    if(!user){
+    if (!user) {
         throw new ApiError(500, "Something went wrong while updating avatar");
     }
     // delete the already uploaded profile image from cloudinary
@@ -290,14 +298,17 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Cover image file is missing");
     }
     // upload the cover image to cloudinary
-    const coverImageResponse = await uploadOnCloudinary(coverImageLocalPath, coverImageCloudinaryFoldername);
+    const coverImageResponse = await uploadOnCloudinary(
+        coverImageLocalPath,
+        coverImageCloudinaryFoldername
+    );
     if (!coverImageResponse) {
         throw new ApiError(500, "Something went wrong in cloudinary");
     }
     const userId = req.user?._id;
     // get the previously stored cover image url
     const cloudinaryCoverUrl = await User.findById(userId).select("coverImage");
-    console.log('cloudinary cover image: ', cloudinaryCoverUrl);
+    console.log("cloudinary cover image: ", cloudinaryCoverUrl);
     const user = await User.findByIdAndUpdate(
         userId,
         {
@@ -307,18 +318,150 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
         },
         { new: true }
     ).select("-password");
-    if(!user){
-        throw new ApiError(500, "Something went wrong while updating cover image");
+    if (!user) {
+        throw new ApiError(
+            500,
+            "Something went wrong while updating cover image"
+        );
     }
     // delete the already uploaded cover image from cloudinary if it is available
-    if(cloudinaryCoverUrl.coverImage)   
+    if (cloudinaryCoverUrl.coverImage)
         deleteFromCloudinary(cloudinaryCoverUrl.coverImage);
-    return res.status(200).json(new ApiResponse(200, "Cover Image Updated", user));
+    return res
+        .status(200)
+        .json(new ApiResponse(200, "Cover Image Updated", user));
 });
 
-const getCurrentUser = asyncHandler(async (req, res)=>{
-    return res.status(200).json(new ApiResponse(200, "User fetched Successfully", req.user));
-})
+const getCurrentUser = asyncHandler(async (req, res) => {
+    return res
+        .status(200)
+        .json(new ApiResponse(200, "User fetched Successfully", req.user));
+});
+
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+    const { username } = req.params;
+    
+    console.log(username);
+    if (!username?.trim()) {
+        throw new ApiError(400, "Username does not found");
+    }
+    const channel = await User.aggregate([
+        {
+            $match: {
+                username: username?.toLowerCase(),
+            },
+        },
+        {
+            $lookup: {
+                from: "subcription",
+                localField: "_id",
+                foreignField: "channel",
+                as: "subscribers",
+            },
+        },
+        {
+            $lookup: {
+                from: "subcription",
+                localField: "_id",
+                foreignField: "subscriber",
+                as: "subscribedTo",
+            },
+        },
+        {
+            $addFields: {
+                subscribersCount: {
+                    $size: "$subscribers",
+                },
+                channelSubscribedToCount: {
+                    $size: "$subscribedTo",
+                },
+                isSubscribed: {
+                    $cond: {
+                        if: { Sin: [req.user?._id, "$subscribers.subscriber"] },
+                        then: true,
+                        else: false,
+                    },
+                },
+            },
+        },
+        {
+            $project: {
+                fullname: 1,
+                username: 1,
+                subscribersCount: 1,
+                channelSubscribedToCount: 1,
+                isSubscribed: 1,
+                avatar: 1,
+                coverImage: 1,
+                email: 1,
+            },
+        },
+    ]);
+    console.log(channel);
+    if (!channel?.length) {
+        throw new ApiError(404, "Channel does not found");
+    }
+    return res
+        .status(200)
+        .json(new ApiResponse(200, "User Channel Profile Fetched", channel[0]));
+});
+
+const getWatchHistory = asyncHandler(async (req, res) => {
+    const userId = req.user?._id;
+    if (!userId) {
+        throw new ApiError(400, "Invalid Access Token");
+    }
+    const user = await User.aggregate([
+        {
+            $match: {
+                _id: new mongoose.Types.ObjectId(userId),
+            },
+        },
+        {
+            $lookup: {
+                from: "videos",
+                localField: "watchHistory",
+                foreignField: "_id",
+                as: "watchHistory",
+                pipeline: [
+                    {
+                        $lookup: {
+                            from: "users",
+                            localField: "owner",
+                            foreignField: "_id",
+                            as: "owner",
+                            pipeline: [
+                                {
+                                    $project: {
+                                        fullname: 1,
+                                        username: 1,
+                                        avatar: 1,
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                    {
+                        $addFields: {
+                            owner: {
+                                $first: "$owner",
+                            },                        
+                        }
+                    }
+                       
+                ]
+
+            },
+        },
+        {
+            $project: {
+                watchHistory: 1,
+            },
+        },
+    ]);
+
+    return res.status(200).json(new ApiResponse(200, "Watch History", user[0]?.watchHistory || []));
+});
 export {
     registerUser,
     loginUser,
@@ -328,5 +471,9 @@ export {
     updateAccountDetails,
     updateUserAvatar,
     updateUserCoverImage,
-    getCurrentUser
+    getCurrentUser,
+    getUserChannelProfile,
+    getWatchHistory
 };
+
+// route is not defined for getUserChannelProfile yet
